@@ -4,6 +4,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 
@@ -30,7 +31,7 @@ def gauss_kernel(n, sigma):
     xi, yi = np.meshgrid(vals, vals)
     h = gaussian(xi, yi, sigma)
 
-    return h
+    return h / np.sum(h)
 
 
 def filter_convolve(img, kernel):
@@ -79,7 +80,7 @@ def hybridize(img1, img2, sigma1=5, sigma2=5):
     # Add lowpassed version of image 1 to highpassed version of image 2
     hybrid = blur_img1 + highpass_img2
     
-    return hybrid * 255
+    return hybrid * 255, blur_img1 * 255, highpass_img2 * 255
 
 
 def main(args=None):
@@ -88,7 +89,9 @@ def main(args=None):
     parser = ArgumentParser(description='Hybrid Image Creator')
     parser.add_argument('--img1', dest='img1_path', type=str, help='Path to irst image to be used in creating the hybrid image')
     parser.add_argument('--img2', dest='img2_path', type=str, help='Path to second image to be used in creating the hybrid image')
-    parser.add_argument('-o', '--output_dir', dest='output_dir', default='.', help='Directory to output hybrid image to')        
+    parser.add_argument('--plot_inters', dest='plot_inters', action='store_true', help='Whether to plot intermediate steps as well')
+    parser.add_argument('-o', '--output_dir', dest='output_dir', default='.', help='Directory to output hybrid image to')
+    parser.set_defaults(plot_inters=False)        
     args = parser.parse_args()
     
     # Make output directory if it doesn't exist
@@ -101,13 +104,28 @@ def main(args=None):
     img1, img2 = cv2.imread(str(img1_path)), cv2.imread(str(img2_path))
     
     # Hybridize images
-    hybrid = hybridize(img1, img2, sigma1=5, sigma2=9)
+    hybrid, lowpass, highpass = hybridize(img1, img2, sigma1=3, sigma2=7)
     
-    # Save out hybrid image and its smaller coutnerpart
+    # Save out hybrid image and its smaller counterpart
     cv2.imwrite(str(output_dir / 'hybrid_fullsize.png'), hybrid)
-    small_size = [i // 8 for i in hybrid.shape[:2]]
+    small_size = list(reversed([i // 8 for i in hybrid.shape[:2]]))
     cv2.imwrite(str(output_dir / 'hybrid_small.png'), cv2.resize(hybrid, small_size))
 
+    # Plot intermediate results if desired
+    if args.plot_inters:
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+        
+        ax1.imshow(cv2.cvtColor(lowpass.astype(np.uint8), cv2.COLOR_BGR2RGB))
+        ax1.set_title('Lowpass')
+        
+        ax2.imshow(cv2.cvtColor(highpass.astype(np.uint8), cv2.COLOR_BGR2RGB))
+        ax2.set_title('Highpass')
+        
+        ax3.imshow(cv2.cvtColor(hybrid.astype(np.uint8), cv2.COLOR_BGR2RGB))
+        ax3.set_title('Hybrid')
+        
+        fig.savefig('all_steps.png')
+    
 
 if __name__ == '__main__':
     main()
